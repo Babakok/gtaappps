@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>GTA Türkçe Altyazı + Dublaj</title>
+<style>
+  :root { --bg:#0b0d12; --card:#151922; --line:#262c3a; --text:#eef1f7; --mute:#8b94a7; --acc:#ffb703; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Roboto,sans-serif; }
+  body { padding:env(safe-area-inset-top) 12px calc(env(safe-area-inset-bottom) + 16px); max-width:720px; margin:0 auto; }
+  h1 { font-size:17px; margin:14px 0 10px; letter-spacing:.2px; }
+  h1 span { color:var(--acc); }
+  #stage { position:relative; width:100%; background:#000; border-radius:12px; overflow:hidden; touch-action:none; min-height:140px; }
+  #video { display:block; width:100%; height:auto; }
+  #roi { position:absolute; border:2px solid var(--acc); background:rgba(255,183,3,.12); border-radius:4px; pointer-events:none; }
+  #roiLabel { position:absolute; left:0; top:-18px; font-size:10px; background:var(--acc); color:#000; padding:1px 5px; border-radius:3px; white-space:nowrap; }
+  #hint { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:20px; color:var(--mute); font-size:14px; }
+  .row { display:flex; gap:8px; margin:10px 0; flex-wrap:wrap; }
+  button { appearance:none; border:0; border-radius:10px; padding:12px 14px; font-size:15px; font-weight:600; background:#232938; color:var(--text); }
+  button.primary { background:var(--acc); color:#111; flex:1; }
+  button.danger { background:#5a1f26; }
+  #status { font-size:12px; color:var(--mute); margin:6px 2px; min-height:16px; }
+  #tr { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; min-height:150px; font-size:26px; line-height:1.3; font-weight:700; display:flex; align-items:center; justify-content:center; text-align:center; transition:opacity .4s; }
+  #tr.dim { opacity:.35; }
+  #en { font-size:12px; color:var(--mute); margin:8px 2px 0; min-height:16px; text-align:center; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; margin-top:12px; }
+  label { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:14px; margin:8px 0; }
+  input[type=range] { flex:1; max-width:55%; }
+  input[type=checkbox] { width:22px; height:22px; }
+  details { margin-top:12px; font-size:13px; color:var(--mute); }
+  summary { padding:6px 0; }
+  #dbg { width:100%; background:#fff; border-radius:6px; margin-top:8px; image-rendering:auto; }
+  #raw { white-space:pre-wrap; font-family:ui-monospace,Menlo,monospace; font-size:12px; margin-top:6px; }
+  ol { padding-left:18px; line-height:1.5; }
+</style>
+</head>
+<body>
+<h1><span>GTA</span> Türkçe Altyazı + Canlı Dublaj</h1>
+
+<div id="stage">
+  <video id="video" playsinline muted autoplay></video>
+  <div id="roi"><div id="roiLabel">altyazı bölgesi</div></div>
+  <div id="hint">Başlat'a bas, kamerayı TV'ye çevir.<br>Sonra parmağınla ekranda altyazının çıktığı yeri kutu çizerek seç.</div>
+</div>
+
+<div class="row">
+  <button id="btnStart" class="primary">▶ Başlat</button>
+  <button id="btnTest">🔊 Ses testi</button>
+  <button id="btnReset">Bölgeyi sıfırla</button>
+</div>
+<div id="status">Hazır.</div>
+
+<div id="tr" class="dim">Türkçe çeviri burada görünecek</div>
+<div id="en"></div>
+
+<div class="card">
+  <label>Türkçe dublaj (sesli okuma) <input type="checkbox" id="voiceOn" checked></label>
+  <label>Ses <select id="voiceSel" style="flex:1;max-width:60%;padding:8px;border-radius:8px;background:#232938;color:#eef1f7;border:1px solid #262c3a;font-size:14px"></select></label>
+  <label>Ses tonu <input type="range" id="pitch" min="0.5" max="1.5" step="0.05" value="1"></label>
+  <label>Okuma hızı <input type="range" id="rate" min="0.8" max="1.6" step="0.05" value="1.15"></label>
+  <label>Parlaklık eşiği (okuma zayıfsa oyna) <input type="range" id="thr" min="90" max="245" step="5" value="170"></label>
+  <label>Hızlı mod (tek okumada çevir) <input type="checkbox" id="fast"></label>
+  <label>Yazı boyutu <input type="range" id="fs" min="18" max="44" step="1" value="26"></label>
+</div>
+
+<details>
+  <summary>Ayar / hata ayıklama</summary>
+  <div>OCR'ın gördüğü kırpılmış görüntü:</div>
+  <canvas id="dbg"></canvas>
+  <div id="raw"></div>
+</details>
+
+<details>
+  <summary>İpuçları</summary>
+  <ol>
+    <li>Oyunda altyazıyı aç, boyutunu en büyük yap, arka planını da aç.</li>
+    <li>Telefonu sabitle (tripod/dayanak). TV parlaklığını düşür, yansıma olmasın.</li>
+    <li>Kutuyu sadece altyazı satırlarını kapsayacak kadar dar tut.</li>
+    <li>Metin okunmuyorsa "Parlaklık eşiği"ni değiştir ve kırpılmış görüntüde yazının net beyaz-siyah olduğunu kontrol et.</li>
+    <li>Telefon sesi TV'den ayrı çalar; oyun müziğine göre ses ayarla.</li>
+  </ol>
+</details>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const video=$('video'), stage=$('stage'), roiEl=$('roi'), hint=$('hint');
+  const trEl=$('tr'), enEl=$('en'), statusEl=$('status'), dbg=$('dbg'), rawEl=$('raw');
+  const voiceSel=$('voiceSel'), pitchEl=$('pitch'), voiceOn=$('voiceOn'), rateEl=$('rate'), thrEl=$('thr'), fastEl=$('fast'), fsEl=$('fs');
+
+  const DEFAULT_ROI = {x:0.08,y:0.78,w:0.84,h:0.17};
+  let roi = {...DEFAULT_ROI};
+  let savedVoice='';
+  let stream=null, worker=null, running=false, wakeLock=null;
+
+  // ---- ayarları hatırla (olmazsa sorun değil)
+  try {
+    const s = JSON.parse(localStorage.getItem('gtaTR')||'{}');
+    if (s.roi) roi = s.roi;
+    if (s.rate) rateEl.value = s.rate;
+    if (s.pitch) pitchEl.value = s.pitch;
+    if (s.voiceURI) savedVoice = s.voiceURI;
+    if (s.thr) thrEl.value = s.thr;
+    if (s.fs) fsEl.value = s.fs;
+    if (typeof s.voice==='boolean') voiceOn.checked = s.voice;
+    if (typeof s.fast==='boolean') fastEl.checked = s.fast;
+  } catch(e){}
+  function save(){
+    try { localStorage.setItem('gtaTR', JSON.stringify({roi, voiceURI:voiceSel.value, pitch:pitchEl.value, rate:rateEl.value, thr:thrEl.value, fs:fsEl.value, voice:voiceOn.checked, fast:fastEl.checked})); } catch(e){}
+  }
+  [rateEl,pitchEl,thrEl,fsEl,voiceOn,fastEl].forEach(el=>el.addEventListener('input',()=>{ applyFs(); save(); }));
+  function applyFs(){ trEl.style.fontSize = fsEl.value+'px'; }
+  applyFs();
+
+  function setStatus(t){ statusEl.textContent = t; }
+
+  // ---- ROI kutusu
+  function drawRoi(){
+    roiEl.style.left = roi.x*100+'%';
+    roiEl.style.top = roi.y*100+'%';
+    roiEl.style.width = roi.w*100+'%';
+    roiEl.style.height = roi.h*100+'%';
+  }
+  drawRoi();
+  let drag=null;
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  function pt(e){
+    const r = stage.getBoundingClientRect();
+    return { x: clamp((e.clientX-r.left)/r.width,0,1), y: clamp((e.clientY-r.top)/r.height,0,1) };
+  }
+  stage.addEventListener('pointerdown', e=>{
+    drag = {start:pt(e)};
+    try{ stage.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  stage.addEventListener('pointermove', e=>{
+    if(!drag) return;
+    const p = pt(e), s = drag.start;
+    roi = { x:Math.min(s.x,p.x), y:Math.min(s.y,p.y), w:Math.abs(p.x-s.x), h:Math.abs(p.y-s.y) };
+    drawRoi();
+  });
+  function endDrag(){
+    if(!drag) return;
+    drag=null;
+    if (roi.w<0.05 || roi.h<0.02) roi = {...DEFAULT_ROI};
+    drawRoi(); save();
+  }
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
+  $('btnReset').onclick = ()=>{ roi={...DEFAULT_ROI}; drawRoi(); save(); };
+
+  // ---- Türkçe ses
+  function allVoices(){ return (window.speechSynthesis && speechSynthesis.getVoices()) || []; }
+  function fillVoices(){
+    const vs = allVoices();
+    const tr = vs.filter(v=>v.lang && v.lang.replace('_','-').toLowerCase().startsWith('tr'));
+    const list = tr.length ? tr : vs;
+    const keep = voiceSel.value || savedVoice;
+    voiceSel.innerHTML = '';
+    list.forEach(v=>{
+      const o = document.createElement('option');
+      o.value = v.voiceURI;
+      o.textContent = v.name + (v.lang ? ' ('+v.lang+')' : '');
+      voiceSel.appendChild(o);
+    });
+    if(!list.length){
+      const o = document.createElement('option'); o.textContent='Ses bulunamadı'; voiceSel.appendChild(o);
+    }
+    if(keep && list.some(v=>v.voiceURI===keep)) voiceSel.value = keep;
+  }
+  function pickVoice(){
+    const vs = allVoices();
+    return vs.find(v=>v.voiceURI===voiceSel.value) || vs.find(v=>v.lang && v.lang.replace('_','-').toLowerCase().startsWith('tr')) || null;
+  }
+  fillVoices();
+  voiceSel.addEventListener('change', ()=>{ save(); speak('Merhaba, ben bu sesim.'); });
+  function unlockSpeech(){
+    try {
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0; u.lang='tr-TR';
+      speechSynthesis.speak(u);
+    } catch(e){}
+  }
+  function speak(text){
+    if(!voiceOn.checked || !window.speechSynthesis) return;
+    try {
+      speechSynthesis.cancel();
+      setTimeout(()=>{
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang='tr-TR';
+        const v = pickVoice(); if(v) u.voice=v;
+        u.rate = parseFloat(rateEl.value)||1.1;
+        u.pitch = parseFloat(pitchEl.value)||1;
+        speechSynthesis.speak(u);
+      }, 60);
+    } catch(e){}
+  }
+  $('btnTest').onclick = ()=>{
+    unlockSpeech();
+    const v = pickVoice();
+    if(!v) setStatus('Türkçe ses bulunamadı. Ayarlar > Erişilebilirlik > Sesli İçerik > Sesler > Türkçe indir.');
+    speak('Merhaba, Türkçe dublaj çalışıyor.');
+  };
+
+  // ---- metin işleme
+  function clean(t){
+    return (t||'')
+      .replace(/[\r\n]+/g,' ')
+      .replace(/[|_\\\[\]{}<>~^`*=#@]/g,' ')
+      .replace(/\s+/g,' ')
+      .trim();
+  }
+  function valid(t, conf){
+    if(t.length<6) return false;
+    const letters = (t.match(/[A-Za-z]/g)||[]).length;
+    if(letters/t.length < 0.6) return false;
+    const words = t.split(' ').filter(w=>/[A-Za-z]{2,}/.test(w));
+    if(words.length<2) return false;
+    return conf >= 50;
+  }
+  function bigrams(s){
+    s = s.toLowerCase().replace(/[^a-z]/g,'');
+    const m = new Map();
+    for(let i=0;i<s.length-1;i++){ const g=s.substr(i,2); m.set(g,(m.get(g)||0)+1); }
+    return m;
+  }
+  function similar(a,b){
+    if(!a||!b) return false;
+    const A=bigrams(a), B=bigrams(b);
+    let sa=0,sb=0,inter=0;
+    A.forEach(v=>sa+=v); B.forEach(v=>sb+=v);
+    if(!sa||!sb) return false;
+    A.forEach((v,k)=>{ if(B.has(k)) inter+=Math.min(v,B.get(k)); });
+    return (2*inter)/(sa+sb) >= 0.8;
+  }
+
+  // ---- çeviri
+  const cache = new Map();
+  async function translate(t){
+    if(cache.has(t)) return cache.get(t);
+    let out=null;
+    try {
+      const r = await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=tr&dt=t&q='+encodeURIComponent(t));
+      const j = await r.json();
+      out = j[0].map(x=>x[0]).join('');
+    } catch(e){}
+    if(!out){
+      try {
+        const r = await fetch('https://api.mymemory.translated.net/get?q='+encodeURIComponent(t)+'&langpair=en|tr');
+        const j = await r.json();
+        out = j.responseData.translatedText;
+      } catch(e){}
+    }
+    if(!out) throw new Error('Çeviri alınamadı (internet?)');
+    cache.set(t,out);
+    return out;
+  }
+
+  // ---- ana döngü
+  const work = document.createElement('canvas');
+  const wctx = work.getContext('2d', {willReadFrequently:true});
+  let lastShown='', pending='', pendCount=0, emptyCount=0, seq=0, clearTimer=null;
+
+  async function showLine(en){
+    const my = ++seq;
+    enEl.textContent = en;
+    try {
+      const tr = await translate(en);
+      if(my!==seq) return;
+      trEl.textContent = tr;
+      trEl.classList.remove('dim');
+      speak(tr);
+      clearTimeout(clearTimer);
+      clearTimer = setTimeout(()=>trEl.classList.add('dim'), 7000);
+    } catch(e){
+      setStatus(e.message);
+    }
+  }
+
+  async function tick(){
+    if(!video.videoWidth) return;
+    const vw=video.videoWidth, vh=video.videoHeight;
+    const sx=roi.x*vw, sy=roi.y*vh, sw=Math.max(40,roi.w*vw), sh=Math.max(20,roi.h*vh);
+    const scale = clamp(1400/sw, 0.5, 2);
+    work.width = Math.round(sw*scale); work.height = Math.round(sh*scale);
+    wctx.drawImage(video, sx,sy,sw,sh, 0,0,work.width,work.height);
+    const img = wctx.getImageData(0,0,work.width,work.height);
+    const d = img.data, thr = parseInt(thrEl.value,10);
+    let bright=0; const total = d.length/4;
+    for(let i=0;i<d.length;i+=4){
+      const l = 0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+      let v = 255;
+      if(l>thr){ v=0; bright++; }
+      d[i]=d[i+1]=d[i+2]=v; d[i+3]=255;
+    }
+    wctx.putImageData(img,0,0);
+    dbg.width=work.width; dbg.height=work.height;
+    dbg.getContext('2d').drawImage(work,0,0);
+
+    const ratio = bright/total;
+    let text='', conf=0;
+    if(ratio>0.004 && ratio<0.35){
+      const res = await worker.recognize(work);
+      text = clean(res.data.text); conf = res.data.confidence||0;
+    }
+    rawEl.textContent = `parlak oran: ${(ratio*100).toFixed(2)}%  güven: ${Math.round(conf)}\n${text}`;
+
+    if(!valid(text,conf)){
+      emptyCount++;
+      if(emptyCount>=2){ lastShown=''; pending=''; pendCount=0; }
+      return;
+    }
+    emptyCount=0;
+    if(similar(text,lastShown)) return;
+    if(similar(text,pending)) pendCount++; else { pending=text; pendCount=1; }
+    const need = fastEl.checked ? 1 : 2;
+    if(pendCount>=need){
+      lastShown=text; pending=''; pendCount=0;
+      showLine(text);
+    }
+  }
+
+  async function loop(){
+    while(running){
+      try { await tick(); } catch(e){ setStatus('Hata: '+(e.message||e)); await new Promise(r=>setTimeout(r,800)); }
+      await new Promise(r=>setTimeout(r,120));
+    }
+  }
+
+  async function start(){
+    unlockSpeech();
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      setStatus('Kamera için sayfa https üzerinden açılmalı (Safari).');
+      return;
+    }
+    setStatus('Kamera açılıyor…');
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video:{ facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080} },
+        audio:false
+      });
+    } catch(e){
+      setStatus('Kamera izni verilmedi: '+e.name);
+      return;
+    }
+    video.srcObject = stream;
+    try { await video.play(); } catch(e){}
+    hint.style.display='none';
+    try { if(navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
+    if(!worker){
+      setStatus('OCR motoru yükleniyor (ilk seferde biraz sürer)…');
+      try {
+        worker = await Tesseract.createWorker('eng');
+        await worker.setParameters({ tessedit_pageseg_mode:'6', preserve_interword_spaces:'1' });
+      } catch(e){
+        setStatus('OCR yüklenemedi: '+(e.message||e));
+        return;
+      }
+    }
+    running = true;
+    $('btnStart').textContent='■ Durdur';
+    $('btnStart').classList.add('danger'); $('btnStart').classList.remove('primary');
+    setStatus('Çalışıyor. Altyazı çıkınca çevrilecek.');
+    loop();
+  }
+  function stop(){
+    running=false;
+    try{ speechSynthesis.cancel(); }catch(e){}
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+    try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch(e){}
+    $('btnStart').textContent='▶ Başlat';
+    $('btnStart').classList.remove('danger'); $('btnStart').classList.add('primary');
+    setStatus('Durdu.');
+  }
+  $('btnStart').onclick = ()=>{ running ? stop() : start(); };
+})();
+</script>
+</body>
+</html>
